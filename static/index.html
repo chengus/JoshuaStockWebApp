@@ -126,6 +126,7 @@
         document.getElementById('downloadButton').addEventListener('click', () => {
             if (currentTaskId) {
                 window.location.href = `/download/${currentTaskId}`;
+                document.getElementById('downloadButton').classList.add('hidden');
             }
         });
     </script>
