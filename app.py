@@ -161,7 +161,10 @@ def run_screening_task(tickers, sendEmailBool, task_id, task_dir):
         file_path = export_to_excel(task_dir)
         
         if sendEmailBool:
-            send_email("1215.lucent@gmail.com", "pwqp rabz bqgy uhbf", ["1215.lucent@gmail.com"])
+            smtp_password = os.environ.get('SMTP_PSWD')
+            if not smtp_password:
+                raise ValueError("SMTP password not found in environment variables")
+            send_email("1215.lucent@gmail.com", smtp_password, ["1215.lucent@gmail.com"])
         
         # Update status to completed
         with open(os.path.join(task_dir, 'status.txt'), 'w') as f:
