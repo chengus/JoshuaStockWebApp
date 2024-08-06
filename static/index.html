@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Screening App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #09f;
+            animation: spin 1s ease infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-2xl mx-auto bg-white p-6 rounded-lg shadow-md">
+        <h1 class="text-2xl font-bold mb-4">Stock Screening App</h1>
+        
+        <div class="mb-4">
+            <label for="tickers" class="block mb-2">Enter ticker symbols (one per line):</label>
+            <textarea id="tickers" rows="5" class="w-full p-2 border rounded"></textarea>
+        </div>
+        
+        <div class="mb-4">
+            <label class="inline-flex items-center">
+                <input type="checkbox" id="sendEmail" class="form-checkbox">
+                <span class="ml-2">Send email</span>
+            </label>
+        </div>
+        
+        <button id="runScreening" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Run Screening</button>
+        
+        <div id="loadingSpinner" class="spinner hidden mt-4"></div>
+        
+        <div id="result" class="mt-4"></div>
+        
+        <div id="downloadSection" class="mt-4 hidden">
+            <button id="downloadButton" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">Download Results</button>
+        </div>
+    </div>
+
+    <script>
+        let currentTaskId = null;
+
+        document.getElementById('runScreening').addEventListener('click', async () => {
+            const tickersInput = document.getElementById('tickers').value;
+            const tickers = tickersInput.split('\n').map(t => t.trim()).filter(t => t).join(',');
+            const sendEmail = document.getElementById('sendEmail').checked;
+            const resultDiv = document.getElementById('result');
+            const downloadSection = document.getElementById('downloadSection');
+            const loadingSpinner = document.getElementById('loadingSpinner');
+
+            resultDiv.textContent = '';
+            downloadSection.classList.add('hidden');
+            loadingSpinner.classList.remove('hidden');
+
+            try {
+                const url = new URL('/run_screening', window.location.origin);
+                url.searchParams.append('tickersList', tickers);
+                url.searchParams.append('sendEmailBool', sendEmail);
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                currentTaskId = data.task_id;
+                resultDiv.textContent = `Screening started. Task ID: ${currentTaskId}`;
+
+                checkTaskStatus();
+            } catch (error) {
+                resultDiv.textContent = `Error: ${error.message}`;
+                loadingSpinner.classList.add('hidden');
+            }
+        });
+
+        async function checkTaskStatus() {
+            if (!currentTaskId) return;
+
+            try {
+                const response = await fetch(`/task_status/${currentTaskId}`);
+                const data = await response.json();
+
+                const resultDiv = document.getElementById('result');
+                const downloadSection = document.getElementById('downloadSection');
+                const loadingSpinner = document.getElementById('loadingSpinner');
+
+                if (data.status === 'completed') {
+                    resultDiv.textContent = 'Screening completed. You can now download the results.';
+                    downloadSection.classList.remove('hidden');
+                    loadingSpinner.classList.add('hidden');
+                } else if (data.status === 'error') {
+                    resultDiv.textContent = `Error: ${data.error_message}`;
+                    loadingSpinner.classList.add('hidden');
+                } else {
+                    resultDiv.textContent = `Status: ${data.status}`;
+                    setTimeout(checkTaskStatus, 5000); // Check again in 5 seconds
+                }
+            } catch (error) {
+                console.error('Error checking task status:', error);
+                loadingSpinner.classList.add('hidden');
+            }
+        }
+
+        document.getElementById('downloadButton').addEventListener('click', () => {
+            if (currentTaskId) {
+                window.location.href = `/download/${currentTaskId}`;
+            }
+        });
+    </script>
+</body>
+</html>
