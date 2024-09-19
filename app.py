@@ -190,7 +190,28 @@ def run_screening(tickers, donchian_range = 20):
     process_tickers(tickers, donchian_range)
     find_holdings()
     process_tickers(t20holdings, donchian_range)
-    
+    # Mark repeated entries
+    for key, entries in LONG.items():
+        if len(entries) > 1:
+            for i in range(len(entries)-1):
+                entries[i].append("R")
+            entries[-1].append("")
+        else:
+            entries[0].append("")
+
+    for key, entries in SHORT.items():
+        if len(entries) > 1:
+            for i in range(len(entries)-1):
+                entries[i].append("R")
+            entries[-1].append("")
+        else:
+            entries[0].append("")
+
+    print("LONG:")
+    print(LONG)
+    print()
+    print("SHORT:")
+    print(SHORT)
 
 def process_tickers(tickers, donchian_range):
     processedTickers.extend(tickers)
@@ -275,28 +296,6 @@ def Condition(ticker, window):
                             else:
                                 target_dict[ticker] = [new_entry]
         
-        # Mark repeated entries
-        for key, entries in LONG.items():
-            if len(entries) > 1:
-                for i in range(len(entries)-1):
-                    entries[i].append("R")
-                entries[-1].append("")
-            else:
-                entries[0].append("")
-
-        for key, entries in SHORT.items():
-            if len(entries) > 1:
-                for i in range(len(entries)-1):
-                    entries[i].append("R")
-                entries[-1].append("")
-            else:
-                entries[0].append("")
-
-        print("LONG:")
-        print(LONG)
-        print()
-        print("SHORT:")
-        print(SHORT)
 
     except Exception as e:
         print(f"Error processing {ticker}: {e}")
