@@ -39,7 +39,7 @@ headers = {
     "Connection": "keep-alive",
     "Upgrade-Insecure-Requests": "1",
 }
-defualt_tickers = ["ARKK", "ARKG", "BJK", "CARZ", "CLOU", "DIA", "IAI", "IBB", "IGV", "IHE","ITA", "ITB", "IYT", "IYW", "KBE", "KIE", "KRE", "OIH", "PEJ", "QCLN","QQQ", "SMH", "SPY", "TLT", "USO", "VHT", "VNQ", "XBI", "XLC", "XLF","XLI", "XLK", "XLP", "XLRE", "XLU", "XLV", "XLY", "XME", "XOP", "XRT"]
+defualt_tickers = ['XLB', 'XLC', 'XLF', 'XLI', 'XLK', 'XLP', 'XLRE', 'XLU', 'XLV', 'XLY', 'XRT', 'SMH', 'QQQ', 'SPY', 'DIA', 'XME', 'XOP', 'ARKK', 'ARKG', 'BJK', 'CARZ', 'CLOU', 'GLD', 'IAI', 'IBB', 'IGV', 'IHE', 'ITA', 'ITB', 'IYT', 'IYW', 'KBE', 'KIE', 'KRE', 'KWEB', 'OIH', 'PEJ', 'QCLN', 'TLT', 'USO', 'VHT', 'VNQ', 'XBI']
 processedTickers = []
 
 app = FastAPI()
@@ -54,7 +54,7 @@ async def read_index():
 
 @app.get('/favicon.ico', include_in_schema=False)
 async def favicon():
-    return FileResponse("/static/favicon.ico")
+    return FileResponse("favicon.ico")
 
 task_status = {}
 
@@ -170,7 +170,7 @@ def run_screening_task(tickers, sendEmailBool, task_id, task_dir):
             smtp_password = os.environ.get('SMTP_PSWD')
             if not smtp_password:
                 raise ValueError("SMTP password not found in environment variables")
-            send_email("1215.lucent@gmail.com", smtp_password, ["1215.lucent@gmail.com"])
+            send_email("1215.lucent@gmail.com", smtp_password, ["joshua@uasha.cn"])
         
         # Update status to completed
         with open(os.path.join(task_dir, 'status.txt'), 'w') as f:
@@ -228,71 +228,76 @@ def Condition(ticker, window):
             weekLong = mid_within_range and (current_week['Close'] > current_week['mid']) and (current_week['Close'] > current_week['Open'])
             weekShort = mid_within_range and (current_week['Close'] < current_week['mid']) and (current_week['Close'] < current_week['Open'])
 
-            if weekLong:
+            if weekLong or weekShort:
                 start_date = data.index[i]
-                if results["LONG"] is None or start_date < results["LONG"]:
-                    results["LONG"]=start_date
-                print(f"LONG condition met on {start_date}")
+                position_type = "LONG" if weekLong else "SHORT"
+                results[position_type] = start_date
                 if earliest_date is None or start_date < earliest_date:
                     earliest_date = start_date
-
-            elif weekShort:
-                start_date = data.index[i]
-                if results["SHORT"] is None or start_date < results["SHORT"]:
-                    results["SHORT"]=start_date
-                print(f"SHORT condition met on {start_date}")
-                if earliest_date is None or start_date < earliest_date:
-                    earliest_date = start_date
-
-            print(results)
 
         if earliest_date is not None:
-            print("Trade signals found")
             earliest_date = earliest_date - timedelta(days=90)
-            print(f"Earliest date: {earliest_date}")
             df = yf.download(ticker, start=earliest_date.strftime('%Y-%m-%d'), interval='1d')
-            daily_data = df.iloc[::-1]  # Properly reverse the DataFrame
+            daily_data = df.iloc[::-1]
 
             # Calculate the Donchian Channel for daily data
             daily_data['upper'] = daily_data['High'].rolling(window).max().shift(-window)
             daily_data['lower'] = daily_data['Low'].rolling(window).min().shift(-window)
             daily_data['mid'] = (daily_data['upper'] + daily_data['lower']) / 2
 
-            # Check for daily conditions and print the specific dates
-            if results["LONG"]:
-                long_date = results["LONG"]
-                long_data = daily_data.loc[:long_date]
-                long_signal_dates = long_data[(long_data['Close'] > long_data['upper']) & (long_data['Close'] > long_data['Open'])].index
-                if not long_signal_dates.empty:
-                    print(f"LONG condition confirmed on daily data after {long_date} on dates:")
-                    for date in long_signal_dates:
-                        most_recent_close = round(daily_data.iloc[0]['Close'], 2)
-                        signal_close = round(long_data.loc[date]['Close'], 2)
-                        pct_difference = round(((most_recent_close / signal_close) * 100)-100, 2)
-                        print(date.strftime('%Y-%m-%d'))
-                        LONG[ticker] = LONG.get(ticker, []) + [(date.strftime('%Y-%m-%d'), str(signal_close), str(most_recent_close), str(pct_difference)+"%")]
+            for position_type, signal_date in results.items():
+                if signal_date:
+                    signal_data = daily_data.loc[:signal_date]
+                    signal_dates = signal_data[(signal_data['Close'] > signal_data['upper'] if position_type == "LONG" else signal_data['Close'] < signal_data['lower']) & 
+                                               (signal_data['Close'] > signal_data['Open'] if position_type == "LONG" else signal_data['Close'] < signal_data['Open'])].index
 
+                    if not signal_dates.empty:
+                        target_dict = LONG if position_type == "LONG" else SHORT
+                        for date in signal_dates:
+                            most_recent_close = round(daily_data.iloc[0]['Close'], 2)
+                            signal_close = round(signal_data.loc[date]['Close'], 2)
+                            weekly_donchian_mid = round(signal_data.loc[date]['mid'], 2)
+                            pct_difference = round(((most_recent_close / signal_close) * 100) - 100, 2)
+                            wdm_pct_difference = round(((signal_close / weekly_donchian_mid) * 100) - 100, 2)
+                            
+                            new_entry = [
+                                date.strftime('%Y-%m-%d'),
+                                str(signal_close),
+                                str(most_recent_close),
+                                str(pct_difference) + "%",
+                                position_type,
+                                str(weekly_donchian_mid),
+                                str(wdm_pct_difference) + "%"
+                            ]
+                            
+                            if ticker in target_dict:
+                                target_dict[ticker].append(new_entry)
+                            else:
+                                target_dict[ticker] = [new_entry]
+        
+        # Mark repeated entries
+        for key, entries in LONG.items():
+            if len(entries) > 1:
+                for i in range(len(entries)-1):
+                    entries[i].append("R")
+                entries[-1].append("")
+            else:
+                entries[0].append("")
 
-            if results["SHORT"]:
-                short_date = results["SHORT"]
-                short_data = daily_data.loc[:short_date]
-                short_signal_dates = short_data[(short_data['Close'] < short_data['lower']) & (short_data['Close'] < short_data['Open'])].index
-                if not short_signal_dates.empty:
-                    print(f"SHORT condition confirmed on daily data after {short_date} on dates:")
-                    for date in short_signal_dates:
-                        most_recent_close = round(daily_data.iloc[0]['Close'], 2)
-                        signal_close = round(short_data.loc[date]['Close'], 2)
-                        pct_difference = round(((most_recent_close / signal_close) * 100)-100, 2)
-                        print(date.strftime('%Y-%m-%d'))
-                        SHORT[ticker] = SHORT.get(ticker, []) + [(date.strftime('%Y-%m-%d'), str(signal_close), str(most_recent_close), str(pct_difference)+"%")]
-
-        else:
-            print("No further trade signals")
+        for key, entries in SHORT.items():
+            if len(entries) > 1:
+                for i in range(len(entries)-1):
+                    entries[i].append("R")
+                entries[-1].append("")
+            else:
+                entries[0].append("")
 
         print("LONG:")
         print(LONG)
+        print()
         print("SHORT:")
         print(SHORT)
+
     except Exception as e:
         print(f"Error processing {ticker}: {e}")
         Errors[ticker] = str(e)
@@ -378,7 +383,7 @@ def export_to_excel(task_dir):
                 for record in records:
                     parent = find_parent_etf(ticker)
                     long_data.append([ticker, parent] + list(record))
-            long_df = pd.DataFrame(long_data, columns=["Ticker", "Parent ETF", "Breakout Date", "Breakout Closing Price", "Last Daily Price", "% Difference"])
+            long_df = pd.DataFrame(long_data, columns=["Ticker", "Parent ETF", "Breakout Date", "Breakout Closing Price", "Last Daily Price", "% Difference", "L/S", "Weekly Donchian Mid", "WDM % Difference","Repeated?"])
             long_df.to_excel(writer, sheet_name='LONG', index=False)
             format_excel(writer, 'LONG')
 
@@ -388,7 +393,7 @@ def export_to_excel(task_dir):
                 for record in records:
                     parent = find_parent_etf(ticker)
                     short_data.append([ticker, parent] + list(record))
-            short_df = pd.DataFrame(short_data, columns=["Ticker", "Parent ETF", "Breakout Date", "Breakout Closing Price", "Last Daily Price", "% Difference"])
+            short_df = pd.DataFrame(short_data, columns=["Ticker", "Parent ETF", "Breakout Date", "Breakout Closing Price", "Last Daily Price", "% Difference", "L/S", "Weekly Donchian Mid", "WDM % Difference","Repeated?"])
             short_df.to_excel(writer, sheet_name='SHORT', index=False)
             format_excel(writer, 'SHORT')
 
